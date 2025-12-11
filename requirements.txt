@@ -1,0 +1,10 @@
+# Core dependencies
+numpy
+
+# For LLM-based agents (optional)
+# openai
+# anthropic
+
+# For local LLM inference (optional)
+# vllm
+# transformers

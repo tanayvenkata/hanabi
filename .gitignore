@@ -1,0 +1,30 @@
+# OS generated files
+.DS_Store
+.Trashes
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Build artifacts
+_skbuild/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
