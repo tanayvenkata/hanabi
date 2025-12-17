@@ -1,8 +1,11 @@
 # Core dependencies
 numpy
+requests
 
-# For LLM-based agents (optional)
-# openai
+# For LLM-based agents (BasicLLMAgent)
+openai  # Required for LM Studio, OpenAI, and other OpenAI-compatible APIs
+
+# For other LLM providers (optional)
 # anthropic
 
 # For local LLM inference (optional)
