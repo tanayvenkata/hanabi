@@ -6,7 +6,7 @@ Uses [Google DeepMind's Hanabi Learning Environment](https://github.com/google-d
 
 # Agent Performance Metrics
 
-**BalancedGreedyAgent**: implemented with clue efficiency maximizer so the clue conveying the most information is selected -- 30% performance improvement with greedy strategy (selecting card with max efficiency) than random play with efficiency threshold of 6.0
+**BalancedGreedyAgent**: Implemented with clue efficiency maximizer so the clue conveying the most information is selected -- 30% performance improvement with greedy strategy (selecting card with max efficiency) than random play with efficiency threshold of 6.0
 
 
 ## Setup
