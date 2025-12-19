@@ -15,11 +15,68 @@ source venv/bin/activate
 pip install -e hanabi_env/
 pip install -r requirements.txt
 
+# Configure LLM (for LLM-based agents)
+cp .env.example .env
+# Edit .env with your LLM settings (OpenAI API key or local LLM URL)
+
 # Verify installation
 python -c "from hanabi_learning_environment import rl_env; print('Success!')"
 
 # Run test games with random agents
 python -m shared.game_runner
+```
+
+## LLM Configuration
+
+The LLM-based agents (council agent, etc.) support both local and cloud LLM providers.
+
+### Setup
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and configure your LLM provider:
+
+   **Option A: Using OpenAI API**
+   ```bash
+   LLM_PROVIDER=openai
+   OPENAI_API_KEY=sk-proj-your-key-here
+   LLM_MODEL=gpt-4o-mini  # or gpt-4o, gpt-4-turbo, etc.
+   ```
+
+   **Option B: Using Local LLM (LM Studio, vLLM, etc.)**
+   ```bash
+   LLM_PROVIDER=local
+   LLM_URL=http://127.0.0.1:1234/v1/chat/completions
+   LLM_MODEL=your-model-name
+   ```
+
+3. The `.env` file is gitignored and will not be committed.
+
+### Programmatic Configuration
+
+You can also configure the LLM in code:
+
+```python
+from agents.llm import CouncilAgent
+
+# Using OpenAI
+agent = CouncilAgent(player_id=0, config={
+    "llm_provider": "openai",
+    "openai_api_key": "sk-...",
+    "model": "gpt-4o-mini",
+    "verbose": True
+})
+
+# Using local LLM
+agent = CouncilAgent(player_id=0, config={
+    "llm_provider": "local",
+    "llm_url": "http://localhost:1234/v1/chat/completions",
+    "model": "nvidia/nemotron-3-nano",
+    "verbose": True
+})
 ```
 
 ## Architecture

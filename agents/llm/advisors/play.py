@@ -19,6 +19,7 @@ Key Context Needed:
 
 import re
 from typing import Any, Dict, Optional
+from collections import defaultdict
 
 from agents.llm.advisors.base import BaseAdvisor, Recommendation
 
@@ -74,42 +75,52 @@ REASONING: <brief explanation>"""
         """
         Extract context relevant to play decisions.
 
-        TODO: Customize what the play advisor sees.
-        Currently returns placeholder/full observation.
-
-        Consider including:
-        - card_knowledge for our hand (what hints we have)
-        - fireworks (what ranks are playable)
-        - life_tokens (how much risk we can take)
-        - Maybe inferred info from visible cards
+        Includes:
+        - Game state (fireworks, tokens, deck size)
+        - Teammates' visible cards
+        - Probabilistic knowledge about our own cards (from orchestrator)
+        - Hints we've received about our cards
+        - Discard pile information
         """
-        # TODO: Filter to only relevant info for play decisions
-        #
-        # Example of what we might want:
-        # return {
-        #     "my_hand_knowledge": observation.get("card_knowledge", [[]])[0],
-        #     "fireworks": observation.get("fireworks", {}),
-        #     "life_tokens": observation.get("life_tokens", 3),
-        #     "playable_ranks": {c: r+1 for c, r in observation.get("fireworks", {}).items()},
-        # }
+        # Get teammates' hands (skip index 0 which is our hidden hand)
+        observed_hands = observation.get("observed_hands", [])
+        teammates_cards = []
+        for i in range(1, len(observed_hands)):
+            teammates_cards.append({
+                "player_id": i,
+                "cards": observed_hands[i]
+            })
 
-        # For now, return key fields (customize later)
         return {
+            # Game state
             "fireworks": observation.get("fireworks", {}),
             "life_tokens": observation.get("life_tokens", 3),
+            "information_tokens": observation.get("information_tokens", 8),
+            "deck_size": observation.get("deck_size", 0),
+
+            # Our hand knowledge
             "my_hand_knowledge": observation.get("card_knowledge", [[]])[0] if observation.get("card_knowledge") else [],
-            # TODO: Add more context as needed
+
+            # Probabilistic card knowledge (computed once by orchestrator)
+            "card_probabilities": observation.get("card_probabilities", []),
+
+            # Teammates' visible cards
+            "teammates_cards": teammates_cards,
+
+            # Discard pile
+            "discard_pile": observation.get("discard_pile", []),
         }
 
     def format_context(self, context: Dict[str, Any]) -> str:
         """
         Format play context for the prompt.
 
-        TODO: Make this more readable/useful for the LLM.
+        Displays game state, teammates' cards, and probabilistic card knowledge.
         """
         lines = []
 
-        # Fireworks
+        # Game state
+        lines.append("=== GAME STATE ===")
         fireworks = context.get("fireworks", {})
         lines.append("FIREWORKS (current piles):")
         lines.append("  " + "  ".join(f"{c}:{r}" for c, r in fireworks.items()))
@@ -117,16 +128,36 @@ REASONING: <brief explanation>"""
 
         # What's playable
         playable = {c: r+1 for c, r in fireworks.items() if r < 5}
-        lines.append("PLAYABLE RANKS (what we need):")
+        lines.append("PLAYABLE RANKS (what we need next):")
         lines.append("  " + ", ".join(f"{c} needs {r}" for c, r in playable.items()))
         lines.append("")
 
-        # Life tokens
+        # Tokens and deck
         lines.append(f"LIFE TOKENS: {context.get('life_tokens', 3)}/3")
+        lines.append(f"INFORMATION TOKENS: {context.get('information_tokens', 8)}/8")
+        lines.append(f"DECK SIZE: {context.get('deck_size', 0)} cards remaining")
         lines.append("")
 
-        # Our hand knowledge
-        lines.append("YOUR HAND (only hints you've received):")
+        # Teammates' cards (visible to us)
+        lines.append("=== TEAMMATES' CARDS (visible to you) ===")
+        teammates = context.get("teammates_cards", [])
+        if teammates:
+            for teammate in teammates:
+                player_id = teammate["player_id"]
+                cards = teammate["cards"]
+                lines.append(f"Player {player_id}:")
+                for i, card in enumerate(cards):
+                    color = card.get("color", "?")
+                    rank = card.get("rank", -1)
+                    rank_display = rank + 1 if rank >= 0 else "?"
+                    lines.append(f"  Slot {i}: {color}{rank_display}")
+                lines.append("")
+        else:
+            lines.append("  (No teammates visible)")
+            lines.append("")
+
+        # Our hand - hints received
+        lines.append("=== YOUR HAND (hints you've received) ===")
         hand_knowledge = context.get("my_hand_knowledge", [])
         for i in range(5):
             if i < len(hand_knowledge):
@@ -141,7 +172,48 @@ REASONING: <brief explanation>"""
                 known = ", ".join(known_parts) if known_parts else "nothing"
             else:
                 known = "nothing"
-            lines.append(f"  Slot {i}: [You know: {known}]")
+            lines.append(f"  Slot {i}: [Hints: {known}]")
+        lines.append("")
+
+        # Probabilistic card knowledge
+        lines.append("=== PROBABILISTIC CARD KNOWLEDGE ===")
+        lines.append("(What cards you likely have based on visible cards, discards, and hints)")
+        lines.append("")
+        card_probs = context.get("card_probabilities", [])
+        for slot_data in card_probs:
+            slot = slot_data.get("slot")
+            possibilities = slot_data.get("possibilities", [])
+
+            lines.append(f"Slot {slot}:")
+            if possibilities:
+                # Show top 3 most likely possibilities
+                for i, poss in enumerate(possibilities[:3]):
+                    color = poss["color"]
+                    rank = poss["rank"]
+                    prob = poss["probability"]
+                    count = poss["count"]
+                    lines.append(f"  {color}{rank}: {prob*100:.1f}% (count: {count})")
+                if len(possibilities) > 3:
+                    lines.append(f"  ... and {len(possibilities) - 3} other possibilities")
+            else:
+                lines.append("  (No valid possibilities)")
+            lines.append("")
+
+        # Discard pile summary
+        discard_pile = context.get("discard_pile", [])
+        if discard_pile:
+            lines.append("=== DISCARD PILE ===")
+            discard_counts = defaultdict(int)
+            for card in discard_pile:
+                color = card.get("color", "?")
+                rank = card.get("rank", -1)
+                rank_display = rank + 1 if rank >= 0 else "?"
+                card_str = f"{color}{rank_display}"
+                discard_counts[card_str] += 1
+
+            for card_str, count in sorted(discard_counts.items()):
+                lines.append(f"  {card_str}: {count}x")
+            lines.append("")
 
         return "\n".join(lines)
 

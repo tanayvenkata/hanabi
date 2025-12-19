@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from agents.llm.advisors import PlayAdvisor, HintAdvisor, DiscardAdvisor, Recommendation
 from agents.llm.main_agent import MainDecisionAgent, Decision
+from shared.card_inference import calculate_card_probabilities
 
 
 class Orchestrator:
@@ -60,6 +61,31 @@ class Orchestrator:
         # History tracking (for stateful context)
         # TODO: Implement history tracking
         self.history: list = []
+
+    def _augment_observation(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Augment observation with computed card probabilities.
+
+        This is done once at the orchestrator level so all advisors
+        can benefit from the same probabilistic reasoning without
+        redundant computation.
+
+        Args:
+            observation: Raw game observation
+
+        Returns:
+            Observation dict with added 'card_probabilities' field
+        """
+        # Create a copy to avoid mutating the original
+        augmented_obs = observation.copy()
+
+        # Calculate card probabilities once
+        card_probabilities = calculate_card_probabilities(observation)
+
+        # Add to observation
+        augmented_obs["card_probabilities"] = card_probabilities
+
+        return augmented_obs
 
     def get_recommendations(
         self,
@@ -140,8 +166,11 @@ class Orchestrator:
         Returns:
             Final Decision
         """
-        # 1. Get recommendations from all advisors
-        play_rec, hint_rec, discard_rec = self.get_recommendations(observation)
+        # 0. Augment observation with card probabilities (computed once)
+        augmented_obs = self._augment_observation(observation)
+
+        # 1. Get recommendations from all advisors (using augmented observation)
+        play_rec, hint_rec, discard_rec = self.get_recommendations(augmented_obs)
 
         # 2. Main agent makes final decision
         decision = self.main_agent.decide(

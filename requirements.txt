@@ -1,10 +1,16 @@
 # Core dependencies
 numpy
+requests
 
-# For LLM-based agents (optional)
-# openai
+# Environment variable management
+python-dotenv
+
+# For LLM-based agents
+openai  # Required for OpenAI API support
+
+# Optional: Additional LLM providers
 # anthropic
 
-# For local LLM inference (optional)
+# Optional: Local LLM inference
 # vllm
 # transformers

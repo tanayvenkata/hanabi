@@ -12,10 +12,11 @@ To implement a new advisor:
 """
 
 import re
-import requests
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
+
+from shared.llm_client import LLMClient
 
 
 @dataclass
@@ -61,16 +62,17 @@ class BaseAdvisor(ABC):
 
         Args:
             config: Optional configuration dict with:
-                - llm_url: LLM API endpoint (default: LM Studio local)
+                - llm_provider: "local" or "openai" (default: from .env or "local")
+                - llm_url: LLM API endpoint for local (default: LM Studio)
                 - model: Model name to use
                 - temperature: Sampling temperature
+                - openai_api_key: OpenAI API key (default: from .env)
                 - verbose: Print debug info
         """
         config = config or {}
 
-        self.llm_url = config.get("llm_url", "http://127.0.0.1:1234/v1/chat/completions")
-        self.model = config.get("model", "nvidia/nemotron-3-nano")
-        self.temperature = config.get("temperature", 0.3)
+        # Create LLM client (handles local and OpenAI)
+        self.llm_client = LLMClient(config)
         self.verbose = config.get("verbose", False)
 
         # Prompt templates - override in subclasses or set via prompts.py
@@ -144,29 +146,19 @@ class BaseAdvisor(ABC):
         """
         Call the LLM API.
 
+        Uses the shared LLM client which supports both local and OpenAI.
+
         Args:
             prompt: User prompt to send
 
         Returns:
             LLM response text
         """
-        try:
-            response = requests.post(
-                self.llm_url,
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": self.system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": self.temperature,
-                },
-                timeout=120,
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
-        except requests.exceptions.RequestException as e:
-            return f"ERROR: LLM request failed: {e}"
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+        return self.llm_client.chat_completion(messages)
 
     def parse_response(self, response: str) -> Recommendation:
         """
